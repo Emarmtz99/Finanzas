@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Finanzas">
+  <title>Control de Finanzas</title>
+  
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/recharts@2.10.0/dist/Recharts.js"></script>
+  
+  <style>
+    * {
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    input, textarea, select {
+      -webkit-user-select: text;
+      user-select: text;
+    }
+    
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    
+    @keyframes slideUp {
+      from {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+    
+    .animate-slideUp {
+      animation: slideUp 0.3s ease-out;
+    }
+    
+    .safe-area-top {
+      padding-top: max(1rem, env(safe-area-inset-top));
+    }
+    
+    .safe-area-bottom {
+      padding-bottom: max(1rem, calc(80px + env(safe-area-inset-bottom)));
+    }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    
+    const FinanceApp = () => {
+      const [activeTab, setActiveTab] = useState('home');
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [modalType, setModalType] = useState(null);
+      
+      // Estados principales con localStorage
+      const [cuenta, setCuenta] = useState(() => {
+        const saved = localStorage.getItem('cuenta');
+        return saved ? parseFloat(saved) : 5000;
+      });
+      
+      const [cartera, setCartera] = useState(() => {
+        const saved = localStorage.getItem('cartera');
+        return saved ? parseFloat(saved) : 1200;
+      });
+      
+      const [deudas, setDeudas] = useState(() => {
+        const saved = localStorage.getItem('deudas');
+        return saved ? parseFloat(saved) : 800;
+      });
+      
+      const [transacciones, setTransacciones] = useState(() => {
+        const saved = localStorage.getItem('transacciones');
+        return saved ? JSON.parse(saved) : [
+          { id: 1, monto: 250, tipo: 'compra', metodo: 'Débito', categoria: 'Comida', fecha: '2024-01-15' },
+          { id: 2, monto: 100, tipo: 'compra', metodo: 'Efectivo', categoria: 'Antojos', fecha: '2024-01-14' },
+        ];
+      });
+      
+      const [pagos, setPagos] = useState(() => {
+        const saved = localStorage.getItem('pagos');
+        return saved ? JSON.parse(saved) : [];
+      });
+      
+      const [categorias, setCategorias] = useState(() => {
+        const saved = localStorage.getItem('categorias');
+        return saved ? JSON.parse(saved) : ['Comida', 'Antojos', 'Salidas', 'Gastos'];
+      });
+      
+      const [formData, setFormData] = useState({
+        monto: '',
+        metodo: 'Débito',
+        categoria: 'Comida',
+        descripcion: '',
+        fecha: new Date().toISOString().split('T')[0],
+        banco: ''
+      });
+      
+      const [nuevaCategoria, setNuevaCategoria] = useState('');
+
+      // Guardar en localStorage cuando cambian los datos
+      useEffect(() => {
+        localStorage.setItem('cuenta', cuenta.toString());
+      }, [cuenta]);
+      
+      useEffect(() => {
+        localStorage.setItem('cartera', cartera.toString());
+      }, [cartera]);
+      
+      useEffect(() => {
+        localStorage.setItem('deudas', deudas.toString());
+      }, [deudas]);
+      
+      useEffect(() => {
+        localStorage.setItem('transacciones', JSON.stringify(transacciones));
+      }, [transacciones]);
+      
+      useEffect(() => {
+        localStorage.setItem('pagos', JSON.stringify(pagos));
+      }, [pagos]);
+      
+      useEffect(() => {
+        localStorage.setItem('categorias', JSON.stringify(categorias));
+      }, [categorias]);
+
+      const totalPrincipal = cuenta + cartera;
+
+      // Funciones de transacciones
+      const handleCompra = () => {
+        const monto = parseFloat(formData.monto);
+        if (!monto || monto <= 0) {
+          alert('Ingresa un monto válido');
+          return;
+        }
+
+        const nuevaTransaccion = {
+          id: Date.now(),
+          monto,
+          tipo: 'compra',
+          metodo: formData.metodo,
+          categoria: formData.categoria,
+          descripcion: formData.descripcion,
+          fecha: formData.fecha
+        };
+
+        setTransacciones([nuevaTransaccion, ...transacciones]);
+
+        if (formData.metodo === 'Débito') {
+          if (monto > cuenta) {
+            alert('Saldo insuficiente en tu cuenta');
+            setTransacciones(transacciones);
+            return;
+          }
+          setCuenta(cuenta - monto);
+        } else if (formData.metodo === 'Efectivo') {
+          if (monto > cartera) {
+            alert('No tienes suficiente efectivo');
+            setTransacciones(transacciones);
+            return;
+          }
+          setCartera(cartera - monto);
+        } else if (formData.metodo === 'Crédito') {
+          setDeudas(deudas + monto);
+        }
+
+        resetForm();
+      };
+
+      const handleDeposito = () => {
+        const monto = parseFloat(formData.monto);
+        if (!monto || monto <= 0) {
+          alert('Ingresa un monto válido');
+          return;
+        }
+
+        const nuevaTransaccion = {
+          id: Date.now(),
+          monto,
+          tipo: 'deposito',
+          metodo: 'Cuenta',
+          categoria: 'Ingreso',
+          descripcion: formData.descripcion,
+          fecha: formData.fecha
+        };
+
+        setTransacciones([nuevaTransaccion, ...transacciones]);
+        setCuenta(cuenta + monto);
+        resetForm();
+      };
+
+      const handleRetiro = () => {
+        const monto = parseFloat(formData.monto);
+        if (!monto || monto <= 0 || monto > cuenta) {
+          alert('Ingresa un monto válido o disponible');
+          return;
+        }
+
+        const nuevaTransaccion = {
+          id: Date.now(),
+          monto,
+          tipo: 'retiro',
+          metodo: 'Cuenta',
+          categoria: 'Retiro',
+          descripcion: formData.descripcion,
+          fecha: formData.fecha
+        };
+
+        setTransacciones([nuevaTransaccion, ...transacciones]);
+        setCuenta(cuenta - monto);
+        setCartera(cartera + monto);
+        resetForm();
+      };
+
+      const handlePago = () => {
+        const monto = parseFloat(formData.monto);
+        if (!monto || !formData.banco || !formData.fecha) {
+          alert('Completa todos los campos');
+          return;
+        }
+
+        const nuevoPago = {
+          id: Date.now(),
+          monto,
+          fecha: formData.fecha,
+          banco: formData.banco,
+          descripcion: formData.descripcion
+        };
+
+        setPagos([...pagos, nuevoPago]);
+        setDeudas(deudas + monto);
+        resetForm();
+      };
+
+      const handleAgregarCategoria = () => {
+        if (nuevaCategoria.trim() && !categorias.includes(nuevaCategoria)) {
+          setCategorias([...categorias, nuevaCategoria]);
+          setNuevaCategoria('');
+        }
+      };
+
+      const resetForm = () => {
+        setFormData({
+          monto: '',
+          metodo: 'Débito',
+          categoria: 'Comida',
+          descripcion: '',
+          fecha: new Date().toISOString().split('T')[0],
+          banco: ''
+        });
+        setIsModalOpen(false);
+      };
+
+      const openModal = (type) => {
+        setModalType(type);
+        setIsModalOpen(true);
+      };
+
+      // Cálculos para dashboard
+      const gastoTotal = transacciones.filter(t => t.tipo === 'compra').reduce((sum, t) => sum + t.monto, 0);
+      
+      const gastosPorCategoria = {};
+      transacciones.filter(t => t.tipo === 'compra').forEach(t => {
+        gastosPorCategoria[t.categoria] = (gastosPorCategoria[t.categoria] || 0) + t.monto;
+      });
+
+      // Modal Component
+      const Modal = ({ title, children }) => (
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+          <div className="w-full bg-white rounded-t-3xl p-6 animate-slideUp max-h-[90vh] overflow-y-auto safe-area-bottom">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">{title}</h2>
+              <button onClick={() => setIsModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg text-2xl">×</button>
+            </div>
+            {children}
+          </div>
+        </div>
+      );
+
+      // TAB: HOME
+      const HomeTab = () => (
+        <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50 pb-32 safe-area-top">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-b-3xl shadow-lg">
+            <p className="text-blue-100 text-sm font-medium mb-2">Total Principal</p>
+            <h1 className="text-5xl font-bold mb-8">
+              ${totalPrincipal.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+            </h1>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white/20 backdrop-blur rounded-2xl p-4">
+                <p className="text-blue-100 text-xs font-medium">Cuenta</p>
+                <p className="text-2xl font-bold text-green-300 mt-1">
+                  ${cuenta.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                </p>
+              </div>
+              <div className="bg-white/20 backdrop-blur rounded-2xl p-4">
+                <p className="text-blue-100 text-xs font-medium">Cartera</p>
+                <p className="text-2xl font-bold text-yellow-300 mt-1">
+                  ${cartera.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 bg-red-500/30 backdrop-blur rounded-2xl p-4">
+              <p className="text-red-100 text-xs font-medium">Deudas</p>
+              <p className="text-2xl font-bold text-red-200 mt-1">
+                -${deudas.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+              </p>
+            </div>
+          </div>
+
+          <div className="p-6 grid grid-cols-1 gap-3">
+            <button
+              onClick={() => openModal('compra')}
+              className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transition-all active:scale-95"
+            >
+              🛒 Compra
+            </button>
+            <button
+              onClick={() => openModal('deposito')}
+              className="bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transition-all active:scale-95"
+            >
+              📈 Depósito
+            </button>
+            <button
+              onClick={() => openModal('retiro')}
+              className="bg-gradient-to-r from-amber-500 to-amber-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transition-all active:scale-95"
+            >
+              💵 Retiro
+            </button>
+          </div>
+
+          <div className="px-6 mt-6">
+            <h3 className="text-lg font-bold text-gray-800 mb-4">Transacciones Recientes</h3>
+            <div className="space-y-2">
+              {transacciones.slice(0, 5).map(t => (
+                <div key={t.id} className="bg-white p-4 rounded-xl flex justify-between items-center border-l-4 border-blue-500">
+                  <div>
+                    <p className="font-semibold text-gray-800">{t.categoria}</p>
+                    <p className="text-sm text-gray-500">{t.metodo}</p>
+                  </div>
+                  <p className="font-bold text-gray-800">
+                    ${t.monto.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+
+      // TAB: DASHBOARD
+      const DashboardTab = () => (
+        <div className="min-h-screen bg-gradient-to-b from-purple-50 via-white to-gray-50 pb-32 safe-area-top">
+          <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-6 rounded-b-3xl shadow-lg">
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="text-purple-100 mt-2">Análisis de tus finanzas</p>
+          </div>
+
+          <div className="p-6 space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white rounded-2xl p-4 shadow-md border-t-4 border-indigo-500">
+                <p className="text-gray-500 text-sm font-medium">Gasto Total</p>
+                <p className="text-2xl font-bold text-indigo-600 mt-2">
+                  ${gastoTotal.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                </p>
+              </div>
+              <div className="bg-white rounded-2xl p-4 shadow-md border-t-4 border-green-500">
+                <p className="text-gray-500 text-sm font-medium">Transacciones</p>
+                <p className="text-2xl font-bold text-green-600 mt-2">
+                  {transacciones.filter(t => t.tipo === 'compra').length}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 shadow-md">
+              <h3 className="text-lg font-bold text-gray-800 mb-4">Desglose por Categoría</h3>
+              <div className="space-y-4">
+                {Object.entries(gastosPorCategoria).length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">Sin datos de gastos</p>
+                ) : (
+                  Object.entries(gastosPorCategoria).map(([categoria, monto]) => (
+                    <div key={categoria}>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-medium text-gray-700">{categoria}</span>
+                        <span className="font-bold text-gray-800">
+                          ${monto.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-blue-500 h-2 rounded-full transition-all"
+                          style={{ width: gastoTotal > 0 ? `${(monto / gastoTotal) * 100}%` : '0%' }}
+                        ></div>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {gastoTotal > 0 ? `${((monto / gastoTotal) * 100).toFixed(1)}%` : '0%'}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="bg-red-50 border-l-4 border-red-500 rounded-2xl p-6">
+              <h3 className="text-lg font-bold text-red-800 mb-3">⚠️ Deudas Pendientes</h3>
+              <p className="text-3xl font-bold text-red-600">
+                ${deudas.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+              </p>
+              <p className="text-red-700 mt-2">Tienes {pagos.length} pago(s) programado(s)</p>
+            </div>
+          </div>
+        </div>
+      );
+
+      // TAB: PAGOS
+      const PagosTab = () => (
+        <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-gray-50 pb-32 safe-area-top">
+          <div className="bg-gradient-to-r from-orange-600 to-orange-700 text-white p-6 rounded-b-3xl shadow-lg">
+            <h1 className="text-3xl font-bold">Mis Pagos</h1>
+            <p className="text-orange-100 mt-2">Gestiona tus deudas</p>
+          </div>
+
+          <div className="p-6">
+            <button
+              onClick={() => openModal('pago')}
+              className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all mb-6 active:scale-95"
+            >
+              ➕ Agregar Pago
+            </button>
+
+            <div className="space-y-3">
+              {pagos.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-500 text-2xl mb-2">💳</p>
+                  <p className="text-gray-500">No hay pagos registrados</p>
+                </div>
+              ) : (
+                pagos.map(pago => (
+                  <div key={pago.id} className="bg-white rounded-xl p-4 shadow-md border-l-4 border-orange-500">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-bold text-gray-800">{pago.banco}</p>
+                        <p className="text-sm text-gray-500">{pago.descripcion || 'Pago'}</p>
+                      </div>
+                      <p className="font-bold text-orange-600">
+                        ${pago.monto.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                      </p>
+                    </div>
+                    <p className="text-xs text-gray-400">Vence: {new Date(pago.fecha).toLocaleDateString('es-MX')}</p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="mt-8 bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl p-6 border border-red-200">
+              <h3 className="font-bold text-gray-800 mb-3">Resumen de Deudas</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Deudas Totales:</span>
+                  <span className="font-bold text-red-600">
+                    ${deudas.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-700">Pagos Registrados:</span>
+                  <span className="font-bold text-gray-800">{pagos.length}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+
+      return (
+        <div className="bg-white font-sans antialiased">
+          {activeTab === 'home' && <HomeTab />}
+          {activeTab === 'dashboard' && <DashboardTab />}
+          {activeTab === 'pagos' && <PagosTab />}
+
+          {/* Navegación inferior */}
+          <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 flex justify-around items-center shadow-2xl safe-area-bottom">
+            <button
+              onClick={() => setActiveTab('home')}
+              className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-all ${
+                activeTab === 'home'
+                  ? 'bg-blue-100 text-blue-600'
+                  : 'text-gray-500'
+              }`}
+            >
+              <span className="text-2xl">🏠</span>
+              <span className="text-xs font-medium">Inicio</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-all ${
+                activeTab === 'dashboard'
+                  ? 'bg-purple-100 text-purple-600'
+                  : 'text-gray-500'
+              }`}
+            >
+              <span className="text-2xl">📊</span>
+              <span className="text-xs font-medium">Dashboard</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('pagos')}
+              className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-all ${
+                activeTab === 'pagos'
+                  ? 'bg-orange-100 text-orange-600'
+                  : 'text-gray-500'
+              }`}
+            >
+              <span className="text-2xl">💳</span>
+              <span className="text-xs font-medium">Pagos</span>
+            </button>
+          </nav>
+
+          {/* MODALES */}
+          {isModalOpen && modalType === 'compra' && (
+            <Modal title="Registrar Compra">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Monto ($)</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={formData.monto}
+                    onChange={(e) => setFormData({ ...formData, monto: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-indigo-500 text-lg"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Método de Pago</label>
+                  <select
+                    value={formData.metodo}
+                    onChange={(e) => setFormData({ ...formData, metodo: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-indigo-500 text-base"
+                  >
+                    <option>Débito</option>
+                    <option>Efectivo</option>
+                    <option>Crédito</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Categoría</label>
+                  <select
+                    value={formData.categoria}
+                    onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-indigo-500 text-base"
+                  >
+                    {categorias.map(cat => (
+                      <option key={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Descripción</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Lunch con amigos"
+                    value={formData.descripcion}
+                    onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Fecha</label>
+                  <input
+                    type="date"
+                    value={formData.fecha}
+                    onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="bg-gray-50 rounded-xl p-4 mt-4">
+                  <h4 className="font-bold text-gray-800 mb-3">Agregar Nueva Categoría</h4>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Nueva categoría"
+                      value={nuevaCategoria}
+                      onChange={(e) => setNuevaCategoria(e.target.value)}
+                      className="flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      onClick={handleAgregarCategoria}
+                      className="bg-indigo-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-600 transition-all active:scale-95"
+                    >
+                      Agregar
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleCompra}
+                  className="w-full bg-gradient-to-r from-indigo-500 to-indigo-600 text-white py-3 rounded-xl font-bold mt-6 hover:shadow-lg transition-all active:scale-95"
+                >
+                  Registrar Compra
+                </button>
+              </div>
+            </Modal>
+          )}
+
+          {isModalOpen && modalType === 'deposito' && (
+            <Modal title="Registrar Depósito">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Monto a Depositar ($)</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={formData.monto}
+                    onChange={(e) => setFormData({ ...formData, monto: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-green-500 text-lg"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Descripción</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Salario"
+                    value={formData.descripcion}
+                    onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Fecha</label>
+                  <input
+                    type="date"
+                    value={formData.fecha}
+                    onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-green-500"
+                  />
+                </div>
+
+                <button
+                  onClick={handleDeposito}
+                  className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-xl font-bold mt-6 hover:shadow-lg transition-all active:scale-95"
+                >
+                  Registrar Depósito
+                </button>
+              </div>
+            </Modal>
+          )}
+
+          {isModalOpen && modalType === 'retiro' && (
+            <Modal title="Registrar Retiro">
+              <div className="space-y-4">
+                <div className="bg-amber-50 border-l-4 border-amber-500 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-amber-800">
+                    <strong>Disponible:</strong> ${cuenta.toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Monto a Retirar ($)</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={formData.monto}
+                    onChange={(e) => setFormData({ ...formData, monto: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-amber-500 text-lg"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Descripción</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Retiro del cajero"
+                    value={formData.descripcion}
+                    onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Fecha</label>
+                  <input
+                    type="date"
+                    value={formData.fecha}
+                    onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <button
+                  onClick={handleRetiro}
+                  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-white py-3 rounded-xl font-bold mt-6 hover:shadow-lg transition-all active:scale-95"
+                >
+                  Registrar Retiro
+                </button>
+              </div>
+            </Modal>
+          )}
+
+          {isModalOpen && modalType === 'pago' && (
+            <Modal title="Registrar Pago">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Monto del Pago ($)</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={formData.monto}
+                    onChange={(e) => setFormData({ ...formData, monto: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-orange-500 text-lg"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Banco o Persona</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Banco X, Tarjeta Crédito"
+                    value={formData.banco}
+                    onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Descripción</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Pago de tarjeta"
+                    value={formData.descripcion}
+                    onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Fecha de Vencimiento</label>
+                  <input
+                    type="date"
+                    value={formData.fecha}
+                    onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <button
+                  onClick={handlePago}
+                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white py-3 rounded-xl font-bold mt-6 hover:shadow-lg transition-all active:scale-95"
+                >
+                  Registrar Pago
+                </button>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<FinanceApp />);
+  </script>
+</body>
+</html>
